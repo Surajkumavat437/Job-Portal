@@ -29,12 +29,49 @@ export const createJob = async (req, res) => {
 };
 
 export const getJobs = async (req, res) => {
-  const allJobs = await job.find();
+  const page =Math.max(1,Number(req.query.page) || 1) ;
+  const limit = Math.min(50, Math.max(1,Number(req.query.limit) || 5));
+  const filter = {};
+  const allowedSort = ["salary", "createdAt"];
+  let sortBy = req.query.sort || "-createdAt";
 
-  res.status(200).json({
-    success: true,
-    message: "Jobs are fetched successfully",
-    data: allJobs,
+  if(!allowedSort.includes(sortBy.replace("-",""))){
+    sortBy = "-createdAt";
+  }
+
+  if(req.query.location){
+    filter.location = req.query.location;
+  }
+
+  if(req.query.jobType){
+    filter.jobType = req.query.jobType;
+  }
+
+  if(req.query.salary){
+    filter.salary = Number(req.query.salary);
+  }
+
+  const search = req.query.search?.trim();
+
+  if(search){
+    filter.title = {
+      $regex:search,
+      $options:"i",
+    }
+  }
+
+  const skip = (page - 1)*limit;
+
+  const allJobs = await job.find(filter).sort(sortBy).skip(skip).limit(limit);
+  const totalJobs = await job.countDocuments(filter);
+  const totalPages = Math.ceil(totalJobs/limit);
+
+ return res.status(200).json({
+  success: true,
+  page,
+  totalPages,
+  totalJobs,
+  data: allJobs,
   });
 };
 
