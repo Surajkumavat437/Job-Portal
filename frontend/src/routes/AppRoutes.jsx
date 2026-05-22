@@ -5,13 +5,12 @@ import ProtectedRoute from "../components/auth/ProtectedRoute.jsx";
 import Home from "../pages/jobseeker/Home";
 import Applications from "../pages/jobseeker/Applications";
 import Dashboard from "../pages/jobseeker/Dashboard";
-import SavedJobs from "../pages/jobseeker/SavedJobs"; // 🌟 1. IMPORTED NEW SAVED JOBS PAGE
+import SavedJobs from "../pages/jobseeker/SavedJobs"; 
 import AdminDashboard from "../pages/recruiter/AdminDashboard.jsx";
 import PostJobForm from "../pages/recruiter/PostJobForm.jsx"; 
 import JobDetails from "../pages/jobseeker/JobDetails.jsx"; 
 
 import Login from "../pages/auth/Login";
-import Register from "../pages/auth/Register";
 import PageError from "../pages/pageError.jsx";
 
 const AppRoutes = () => {
@@ -23,17 +22,13 @@ const AppRoutes = () => {
         {/* 1. PUBLIC ROUTES */}
         <Route path="/" element={<Navigate to="/login" replace />} /> 
         <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
 
         {/* 2. JOB SEEKER ONLY ROUTES */}
         <Route element={<ProtectedRoute allowedRoles={['job_seeker']} />}>
           <Route path="/home" element={<Home />} />
           <Route path="/jobs/:id" element={<JobDetails />} />
           <Route path="/applications" element={<Applications />} />
-          
-          {/* 🌟 2. REGISTERED THE ROUTE UNDER JOB SEEKER ENCLAVE PROTECTION */}
           <Route path="/saved-jobs" element={<SavedJobs />} /> 
-          
           <Route path="/dashboard" element={<Dashboard />} />
         </Route>
 
@@ -43,10 +38,10 @@ const AppRoutes = () => {
           <Route path="/admin/post-job" element={<PostJobForm />} />
         </Route>
 
-      </Route>
+        {/* 🎯 MOVE THIS HERE: Inside the Layout wrapper so it inherits all styles and structures cleanly */}
+        <Route path="*" element={<PageError />} />
 
-      {/* 4. FALLBACK: Redirect any unknown routes to login */}
-      <Route path="*" element={<PageError />} />
+      </Route>
     </Routes>
   );
 };

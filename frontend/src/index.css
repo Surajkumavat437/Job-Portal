@@ -173,15 +173,26 @@
 }
 
 
+/* ☀️ LIGHT THEME AUTOFILL (Default) */
 input:-webkit-autofill,
-input:-webkit-autofill:hover,
-input:-webkit-autofill:focus,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus, 
 input:-webkit-autofill:active {
-  -webkit-text-fill-color: white !important;
+  -webkit-background-clip: text !important; /* 🎯 Clips the browser's bg color so it disappears */
+  -webkit-text-fill-color: #000000 !important; /* Clean black text */
+  color: #000000 !important;
+  transition: background-color 50000s ease-in-out 0s;
+  caret-color: #000000;
+}
 
--webkit-box-shadow: 0 0 0px 1000px rgb(0,0,0) inset !important;
-
-  transition: background-color 9999s ease-in-out 0s;
-
-  caret-color: white;
+/* 🌙 DARK THEME AUTOFILL */
+.dark input:-webkit-autofill,
+.dark input:-webkit-autofill:hover, 
+.dark input:-webkit-autofill:focus, 
+.dark input:-webkit-autofill:active {
+  -webkit-background-clip: text !important; /* 🎯 Clips the browser's bg color so it disappears */
+  -webkit-text-fill-color: #ffffff !important; /* Clean white text */
+  color: #ffffff !important;
+  transition: background-color 50000s ease-in-out 0s;
+  caret-color: #ffffff;
 }

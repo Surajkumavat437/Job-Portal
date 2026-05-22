@@ -42,7 +42,6 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
   const recruiterItems = [
     { name: "Admin Dashboard", path: "/admin/dashboard", icon: LayoutDashboard },
     { name: "Post a Job", path: "/admin/post-job", icon: Briefcase },
-    { name: "Manage Companies", path: "/admin/companies", icon: FileText },
   ];
 
   const navItems = user?.role === "recruiter" ? recruiterItems : seekerItems;
