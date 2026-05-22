@@ -1,34 +1,22 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { Sun, Moon } from "lucide-react";
+// Change this line to look into your new hooks directory:
+import { useTheme } from "../../hooks/useTheme.js"; 
 
 const ToggleButton = () => {
-  const [dark, setDark] = useState(true);
-
-  // sync with DOM
-  useEffect(() => {
-    if (dark) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-  }, [dark]);
+  const { theme, toggleTheme } = useTheme();
 
   return (
     <button
-      onClick={() => setDark(!dark)}
-      className="relative w-14 h-7 bg-muted border border-black rounded-full flex items-center px-1 transition"
+      onClick={toggleTheme}
+      className="p-2 rounded-xl bg-secondary hover:bg-muted text-foreground border border-border transition-all duration-200 active:scale-95 cursor-pointer flex items-center justify-center"
+      aria-label="Toggle Layout Theme"
     >
-      {/* ICON SLIDER */}
-      <div
-        className={`absolute top-1 left-1 w-5 h-5 rounded-full flex items-center justify-center transition-transform duration-300
-        ${dark ? "translate-x-7 bg-primary" : "translate-x-0 bg-background"}`}
-      >
-        {dark ? (
-          <Moon size={12} className="text-primary-foreground" />
-        ) : (
-          <Sun size={12} className="text-yellow-500" />
-        )}
-      </div>
+      {theme === "dark" ? (
+        <Sun size={18} className="text-amber-500 animate-in fade-in zoom-in duration-300" />
+      ) : (
+        <Moon size={18} className="text-slate-700 animate-in fade-in zoom-in duration-300" />
+      )}
     </button>
   );
 };

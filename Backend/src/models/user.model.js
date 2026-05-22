@@ -22,6 +22,13 @@ const userSchema = new mongoose.Schema({
         required:true,
         default:"job_seeker",
     },
+    // 🌟 ADDED FOR THE SAVE FOR LATER FEATURE
+    savedJobs: [
+        {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Job" // References your Job collection model
+        }
+    ]
 },{
     timestamps:true
 })

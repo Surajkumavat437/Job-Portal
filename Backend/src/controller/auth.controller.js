@@ -44,10 +44,9 @@ export const register = asyncHandler(async (req, res) => {
     });
 });
 
-
-
 export const login = asyncHandler(async (req, res) => {
-    const { email, password } = req.body;
+    // 🌟 1. EXTRACT THE SELECTED ROLE FROM THE FRONTEND REQUEST
+    const { email, password, role } = req.body;
 
     if (!email || !password) {
         throw new ApiError(400, "Please fill all fields");
@@ -65,6 +64,12 @@ export const login = asyncHandler(async (req, res) => {
         throw new ApiError(401, "Invalid email or password");
     }
 
+    // 🌟 2. STRICT SECURITY VERIFICATION: Verify selected role matches database reality
+    if (role && user.role !== role) {
+        const formattedRole = user.role.replace('_', ' '); // Converts "job_seeker" -> "job seeker"
+        throw new ApiError(403, `Access denied. Your profile is registered as a ${formattedRole}.`);
+    }
+
     const token = jwt.sign(
         { id: user._id, role: user.role },
         process.env.SECRET_KEY,
@@ -73,9 +78,9 @@ export const login = asyncHandler(async (req, res) => {
 
     res.cookie("accessToken", token, {
         httpOnly: true,
-        secure: true,
+        secure: false,
         sameSite: "strict",
-        maxAge: 7 * 24 * 60 * 60 * 1000,
+        maxAge: 30 * 24 * 60 * 60 * 1000,
     });
 
     res.status(200).json({
@@ -88,4 +93,19 @@ export const login = asyncHandler(async (req, res) => {
             role: user.role,
         },
     });
+});
+
+export const logout = asyncHandler(async (req, res) => {
+    return res
+        .status(200)
+        .cookie("accessToken", "", { 
+            httpOnly: true, 
+            secure: false, 
+            sameSite: "strict",
+            expires: new Date(0) 
+        })
+        .json({ 
+            success: true, 
+            message: "Logged out successfully" 
+        });
 });

@@ -30,10 +30,6 @@ const profileSchema = new Schema(
     resume: {
       type: String,
     },
-
-    profilePhoto: {
-      type: String,
-    },
   },
   {
     timestamps: true,

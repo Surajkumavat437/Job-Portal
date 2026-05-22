@@ -12,9 +12,14 @@ const applicationSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    profile: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Profile", // 🌟 Points directly to your Profile collection
+      required: true,
+    },
     status: {
       type: String,
-      enum: ["applied", "reviewed", "accepted", "rejected"],
+      enum: ["applied", "reviewed", "selected", "rejected"],
       default: "applied",
     },
   },

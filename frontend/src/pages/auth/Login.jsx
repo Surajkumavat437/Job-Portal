@@ -1,114 +1,187 @@
-import React from 'react';
+import React, { useState } from "react";
+import { FcGoogle } from "react-icons/fc";
+import { loginUser, registerUser } from "../../api/authAPI.js"; 
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext.js";
+import { Mail, Lock, User, Loader2 } from "lucide-react"; 
+import { toast } from "react-hot-toast";
 
-const Login = () => {
-  return (
-    /* Forced Dark Mode Wrapper - Ensures it stays dark regardless of system settings */
-    <div className="dark">
-      <div className="flex h-screen w-full bg-background text-foreground overflow-hidden transition-colors duration-500">
+const Auth = () => {
+  const [isLogin, setIsLogin] = useState(true); 
+  const [role, setRole] = useState("job_seeker");
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+  
+  const [formData, setFormData] = useState({
+    fullName: "", 
+    email: "",
+    password: "",
+  });
+
+  const { login } = useAuth();
+
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleAuth = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      const response = isLogin 
+        ? await loginUser({ email: formData.email, password: formData.password, role })
+        : await registerUser({ name: formData.fullName, email: formData.email, password: formData.password, role });
+
+      if (response?.success || response?.data) {
+        const coreUser = response.data?.data || response.data;
         
-        {/* LEFT SECTION: Visual Image (Hidden on mobile) */}
-        <div className="hidden md:flex w-1/2 items-center justify-center p-8 bg-muted/30">
-          <div className="w-full h-full max-h-[70%] relative group overflow-hidden rounded-[2.5rem] shadow-2xl border border-border/50">
-            <img 
-              className="h-full w-full object-fit transition-transform duration-700 group-hover:scale-105" 
-              src="../src/assets/jobportal.png" 
-              alt="Premium Interior" 
-            />
-            {/* Subtle Overlay for Premium feel */}
-            <div className="absolute inset-0 bg-gradient-to-t from-background/40 to-transparent"></div>
-          </div>
+        login(coreUser); 
+        const userRole = coreUser?.role || role;
+
+        toast.success(`Welcome back, ${coreUser?.name || "User"}!`);
+
+        // 🛣️ STRICT ROLE REDIRECTS
+        if (userRole === "recruiter") {
+          navigate("/admin/dashboard", { replace: true }); 
+        } else {
+          navigate("/home", { replace: true }); 
+        }
+        setFormData({ fullName: "", email: "", password: "" });
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Authentication Failed. Please check your credentials.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-center h-screen w-full bg-background text-foreground p-3 md:p-6 overflow-hidden transition-colors duration-300">
+      <div className="flex w-full h-full bg-background rounded-[2.5rem] overflow-hidden shadow-2xl border border-border">
+        
+        {/* LEFT IMAGE SECTION */}
+        <div className="hidden lg:flex w-[65%] relative flex-col bg-muted/10 overflow-hidden">
+          <img className="h-full w-full object-fill" src="../src/assets/finalleftimg.png" alt="Auth Context Branding" />
         </div>
 
-        {/* RIGHT SECTION: Login Form */}
-        <div className="w-full md:w-1/2 flex flex-col items-center justify-center p-6 sm:p-12 relative">
-          
-          <form className="w-full max-w-[360px] flex flex-col items-center animate-in fade-in slide-in-from-bottom-4 duration-1000 border-1 border-grey-50 p-5 rounded-xl">
+        {/* RIGHT AUTH SECTION */}
+        <div className="w-full lg:w-[45%] flex flex-col items-center justify-center p-8 bg-background">
+          <div className="w-full max-w-105 bg-card p-10 rounded-[2.5rem] border border-border shadow-xl ring-1 ring-black/5 animate-in fade-in duration-300">
             
-            <div className="text-center mb-10">
-              <h2 className="text-4xl font-bold tracking-tight text-foreground">Sign in</h2>
-              <p className="text-sm text-muted-foreground mt-3 font-medium">
-                Welcome back! Please sign in to continue
+            <div className="mb-8">
+              <h2 className="text-3xl font-bold text-foreground tracking-tight">
+                {isLogin ? "Welcome back" : "Join us today"}
+              </h2>
+              <p className="text-muted-foreground text-sm mt-2 font-medium">
+                {isLogin ? "Login to your account" : "Create your account to find your dream job"}
               </p>
             </div>
 
-            {/* Google Sign In - Premium Dark Style */}
-            <button 
-              type="button" 
-              className="w-full flex items-center justify-center h-12 rounded-full bg-card hover:bg-secondary transition-all active:scale-[0.98] border border-border shadow-sm group"
-            >
-              <img 
-                src="https://raw.githubusercontent.com/prebuiltui/prebuiltui/main/assets/login/googleLogo.svg" 
-                alt="Google" 
-                className="w-20 h-15 group-hover:opacity-80"
-              />
-            </button>
-
-            {/* Divider */}
-            <div className="flex items-center gap-4 w-full my-8">
-              <div className="flex-1 h-[1px] bg-border/40"></div>
-              <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/60 font-bold">or email</p>
-              <div className="flex-1 h-[1px] bg-border/40"></div>
+            {/* ROLE SELECTOR */}
+            <div className="grid grid-cols-2 gap-4 mb-8">
+              <button 
+                type="button"
+                onClick={() => setRole("job_seeker")} 
+                className={`p-4 rounded-2xl border-2 transition-all cursor-pointer text-center ${role === "job_seeker" ? "border-primary bg-primary/10 text-primary shadow-sm" : "border-border text-muted-foreground hover:bg-secondary/50"}`}
+              >
+                <span className="text-2xl block">🎓</span>
+                <span className="text-[10px] block font-black uppercase mt-1.5 tracking-wider">Job Seeker</span>
+              </button>
+              <button 
+                type="button"
+                onClick={() => setRole("recruiter")} 
+                className={`p-4 rounded-2xl border-2 transition-all cursor-pointer text-center ${role === "recruiter" ? "border-primary bg-primary/10 text-primary shadow-sm" : "border-border text-muted-foreground hover:bg-secondary/50"}`}
+              >
+                <span className="text-2xl block">💼</span>
+                <span className="text-[10px] block font-black uppercase mt-1.5 tracking-wider">Recruiter</span>
+              </button>
             </div>
 
-            {/* Input Fields */}
-            <div className="space-y-4 w-full">
-              <div className="group flex items-center w-full bg-card border border-border rounded-2xl h-12 pl-5 gap-3 focus-within:border-primary/50 focus-within:ring-4 focus-within:ring-primary/10 transition-all shadow-inner">
-                <svg width="18" height="18" viewBox="0 0 16 11" fill="none" className="text-muted-foreground group-focus-within:text-primary transition-colors">
-                  <path fillRule="evenodd" clipRule="evenodd" d="M0 .55.571 0H15.43l.57.55v9.9l-.571.55H.57L0 10.45zm1.143 1.138V9.9h13.714V1.69l-6.503 4.8h-.697zM13.749 1.1H2.25L8 5.356z" fill="currentColor"/>
-                </svg>
-                <input 
-                  type="email" 
-                  placeholder="Email address" 
-                  className="bg-transparent text-foreground placeholder:text-muted-foreground/40 outline-none text-[15px] w-full h-full" 
-                  required 
-                />                 
+            <form onSubmit={handleAuth} className="space-y-5">
+              {/* NAME FIELD - SIGNUP ONLY */}
+              {!isLogin && (
+                <div className="space-y-1.5 animate-in slide-in-from-top-2 duration-300">
+                  <label className="text-xs font-bold text-foreground/70 ml-1">Full Name</label>
+                  <div className="flex items-center bg-secondary/30 border border-border rounded-xl h-12 px-4 gap-3 focus-within:border-primary focus-within:bg-card transition-all">
+                    <User className="w-4 h-4 text-muted-foreground/70" />
+                    <input 
+                      type="text"
+                      name="fullName" 
+                      value={formData.fullName} 
+                      onChange={handleChange} 
+                      placeholder="John Doe" 
+                      autoComplete="off"
+                      className="bg-transparent text-sm w-full outline-none text-foreground placeholder:text-muted-foreground/50" 
+                      required 
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* EMAIL FIELD */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-foreground/70 ml-1">Email address</label>
+                <div className="flex items-center bg-secondary/30 border border-border rounded-xl h-12 px-4 gap-3 focus-within:border-primary focus-within:bg-card transition-all">
+                  <Mail className="w-4 h-4 text-muted-foreground/70" />
+                  <input 
+                    type="email" 
+                    name="email" 
+                    value={formData.email} 
+                    onChange={handleChange} 
+                    placeholder="name@example.com" 
+                    autoComplete="email"
+                    className="bg-transparent text-sm w-full outline-none text-foreground placeholder:text-muted-foreground/50" 
+                    required 
+                  />
+                </div>
               </div>
 
-              <div className="group flex items-center w-full bg-card border border-border rounded-2xl h-12 pl-5 gap-3 focus-within:border-primary/50 focus-within:ring-4 focus-within:ring-primary/10 transition-all shadow-inner">
-                <svg width="16" height="16" viewBox="0 0 13 17" fill="none" className="text-muted-foreground group-focus-within:text-primary transition-colors">
-                  <path d="M13 8.5c0-.938-.729-1.7-1.625-1.7h-.812V4.25C10.563 1.907 8.74 0 6.5 0S2.438 1.907 2.438 4.25V6.8h-.813C.729 6.8 0 7.562 0 8.5v6.8c0 .938.729 1.7 1.625 1.7h9.75c.896 0 1.625-.762 1.625-1.7zM4.063 4.25c0-1.406 1.093-2.55 2.437-2.55s2.438 1.144 2.438 2.55V6.8H4.061z" fill="currentColor"/>
-                </svg>
-                <input 
-                  type="password" 
-                  placeholder="Password" 
-                  className="bg-transparent text-foreground placeholder:text-muted-foreground/40 outline-none text-[15px] w-full h-full" 
-                  required 
-                />
+              {/* PASSWORD FIELD */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-foreground/70 ml-1">Password</label>
+                <div className="flex items-center bg-secondary/30 border border-border rounded-xl h-12 px-4 gap-3 focus-within:border-primary focus-within:bg-card transition-all">
+                  <Lock className="w-4 h-4 text-muted-foreground/70" />
+                  <input 
+                    type="password" 
+                    name="password" 
+                    value={formData.password} 
+                    onChange={handleChange} 
+                    placeholder="••••••••" 
+                    autoComplete={isLogin ? "current-password" : "new-password"} 
+                    className="bg-transparent text-sm w-full outline-none text-foreground placeholder:text-muted-foreground/50" 
+                    required 
+                  />
+                </div>
               </div>
-            </div>
 
-            {/* Helpers */}
-            <div className="w-full flex items-center justify-between mt-6">
-              <label className="flex items-center gap-2 cursor-pointer select-none group">
-                <input 
-                  type="checkbox" 
-                  className="w-4 h-4 rounded-md border-border bg-card text-primary focus:ring-primary accent-primary" 
-                />
-                <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors">
-                  Remember me
-                </span>
-              </label>
-              <a className="text-sm font-semibold text-primary hover:text-primary/80 transition-colors" href="#">
-                Forgot password?
-              </a>
-            </div>
+              <button 
+                type="submit" 
+                disabled={loading} 
+                className="w-full h-12 rounded-xl bg-primary text-primary-foreground font-bold text-sm shadow-md hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                <span>{loading ? "Processing credentials..." : (isLogin ? "Login" : "Create Account")}</span>
+              </button>
+            </form>
 
-            {/* Action Button */}
-            <button 
-              type="submit" 
-              className="mt-10 w-full h-12 rounded-full text-primary-foreground bg-primary shadow-lg shadow-primary/30 font-bold text-[16px] hover:brightness-110 active:scale-[0.96] transition-all"
-            >
-              Sign In
-            </button>
-
-            <p className="text-muted-foreground text-sm mt-8 font-medium">
-              Don’t have an account? <a className="text-primary font-bold hover:underline" href="#">Sign up</a>
+            {/* TOGGLE LINK */}
+            <p className="text-center text-sm text-muted-foreground mt-8 font-medium">
+              {isLogin ? "Don't have an account?" : "Already have an account?"}
+              <button
+                type="button"
+                onClick={() => setIsLogin(!isLogin)}
+                className="text-primary font-bold hover:underline ml-1 cursor-pointer bg-transparent border-none outline-none"
+              >
+                {isLogin ? "Sign up" : "Login"}
+              </button>
             </p>
-          </form>
+
+          </div>
         </div>
       </div>
     </div>
   );
 };
 
-export default Login;
+export default Auth;
