@@ -88,7 +88,7 @@ const Auth = () => {
                   </span>
                 </h1>
                 <p className="text-muted-foreground text-sm font-medium max-w-lg leading-relaxed">
-                  Connect instantly with top engineering teams, manage code assessments, and track every single interview application on a singular, clean dashboard grid.
+                  Explore tailored job openings from leading companies, submit your applications with a single click, and track your recruitment status in real time
                 </p>
               </div>
             ) : (
