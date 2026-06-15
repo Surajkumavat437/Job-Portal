@@ -4,70 +4,19 @@ import jwt from "jsonwebtoken";
 import ApiError from "../utils/apiError.js";
 import asyncHandler from "../utils/asyncHandler.js";
 
-export const register = asyncHandler(async (req, res) => {
-    const { name, email, password, role } = req.body;
+// ─── Shared secure cookie options ──────────────────────────────────────────────
+const COOKIE_OPTIONS = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    // 🌟 FIX: Shifted from 'strict' to 'lax' so local cross-port architectures (5173 -> 3000) pass cookies cleanly
+    sameSite: "lax", 
+    maxAge: 60 * 60 * 1000, // 1 hour
+};
 
-    if (!name || !email || !password || !role) {
-        throw new ApiError(400, "All fields are required");
-    }
-
-    const allowedRoles = ["job_seeker", "recruiter"];
-
-    if (!allowedRoles.includes(role)) {
-        throw new ApiError(400, "Invalid Role");
-    }
-
-    const exists = await User.findOne({ email });
-
-    if (exists) {
-        throw new ApiError(409, "User already exists");
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const newUser = await User.create({
-        name,
-        email,
-        password: hashedPassword,
-        role,
-    });
-
-    res.status(201).json({
-        success: true,
-        message: "User created successfully",
-        data: {
-            id: newUser._id,
-            name: newUser.name,
-            email: newUser.email,
-            role: newUser.role,
-        },
-    });
-});
-
-export const login = asyncHandler(async (req, res) => {
-    // 🌟 1. EXTRACT THE SELECTED ROLE FROM THE FRONTEND REQUEST
-    const { email, password, role } = req.body;
-
-    if (!email || !password) {
-        throw new ApiError(400, "Please fill all fields");
-    }
-
-    const user = await User.findOne({ email });
-
-    if (!user) {
-        throw new ApiError(404, "User not found");
-    }
-
-    const match = await bcrypt.compare(password, user.password);
-
-    if (!match) {
-        throw new ApiError(401, "Invalid email or password");
-    }
-
-    // 🌟 2. STRICT SECURITY VERIFICATION: Verify selected role matches database reality
-    if (role && user.role !== role) {
-        const formattedRole = user.role.replace('_', ' '); // Converts "job_seeker" -> "job seeker"
-        throw new ApiError(403, `Access denied. Your profile is registered as a ${formattedRole}.`);
+// ─── Token Helper ─────────────────────────────────────────────────────────────
+const generateAndSendToken = (user, statusCode, res, message) => {
+    if (!process.env.SECRET_KEY) {
+        throw new ApiError(500, "Server configuration error: SECRET_KEY missing");
     }
 
     const token = jwt.sign(
@@ -76,16 +25,11 @@ export const login = asyncHandler(async (req, res) => {
         { expiresIn: "1h" }
     );
 
-    res.cookie("accessToken", token, {
-        httpOnly: true,
-        secure: false,
-        sameSite: "strict",
-        maxAge: 30 * 24 * 60 * 60 * 1000,
-    });
+    res.cookie("accessToken", token, COOKIE_OPTIONS);
 
-    res.status(200).json({
+    return res.status(statusCode).json({
         success: true,
-        message: "Login successful",
+        message,
         data: {
             id: user._id,
             name: user.name,
@@ -93,19 +37,96 @@ export const login = asyncHandler(async (req, res) => {
             role: user.role,
         },
     });
+};
+
+const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+const isStrongPassword = (password) => password.length >= 8 && /[a-zA-Z]/.test(password) && /\d/.test(password);
+
+// ─── REGISTER (Now fully authenticates on submission!) ───────────────────────
+export const register = asyncHandler(async (req, res) => {
+    const { name, email, password, role } = req.body;
+
+    if (!name || !email || !password || !role) {
+        throw new ApiError(400, "All fields are required");
+    }
+
+    const trimmedName = name.trim();
+    const trimmedEmail = email.trim().toLowerCase();
+
+    if (!trimmedName) {
+        throw new ApiError(400, "Name cannot be blank");
+    }
+    if (!isValidEmail(trimmedEmail)) {
+        throw new ApiError(400, "Invalid email format");
+    }
+    if (!isStrongPassword(password)) {
+        throw new ApiError(400, "Password must be at least 8 characters and contain at least one letter and one digit");
+    }
+
+    const allowedRoles = ["job_seeker", "recruiter"];
+    if (!allowedRoles.includes(role)) {
+        throw new ApiError(400, "Invalid role");
+    }
+
+    const exists = await User.findOne({ email: trimmedEmail });
+    if (exists) {
+        throw new ApiError(409, "User already exists");
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    const newUser = await User.create({
+        name: trimmedName,
+        email: trimmedEmail,
+        password: hashedPassword,
+        role,
+    });
+
+    // 🌟 THE CRITICAL SIGNUP FIX: Automatically drop the session cookie right here!
+    return generateAndSendToken(newUser, 201, res, "User registered and logged in successfully");
 });
 
+// ─── LOGIN ─────────────────────────────────────────────────────────────────────
+export const login = asyncHandler(async (req, res) => {
+    const { email, password, role } = req.body;
+
+    if (!email || !password) {
+        throw new ApiError(400, "Please provide email and password");
+    }
+
+    const trimmedEmail = email.trim().toLowerCase();
+
+    if (!isValidEmail(trimmedEmail)) {
+        throw new ApiError(400, "Invalid email format");
+    }
+
+    const user = await User.findOne({ email: trimmedEmail });
+    const dummyHash = "$2b$12$invalidhashplaceholderXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
+    const match = await bcrypt.compare(password, user ? user.password : dummyHash);
+
+    if (!user || !match) {
+        throw new ApiError(401, "Invalid email or password");
+    }
+
+    if (role && user.role !== role) {
+        throw new ApiError(401, "Invalid email or password");
+    }
+
+    return generateAndSendToken(user, 200, res, "Login successful");
+});
+
+// ─── LOGOUT ────────────────────────────────────────────────────────────────────
 export const logout = asyncHandler(async (req, res) => {
     return res
         .status(200)
-        .cookie("accessToken", "", { 
-            httpOnly: true, 
-            secure: false, 
-            sameSite: "strict",
-            expires: new Date(0) 
+        .cookie("accessToken", "", {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "lax",
+            expires: new Date(0),
         })
-        .json({ 
-            success: true, 
-            message: "Logged out successfully" 
+        .json({
+            success: true,
+            message: "Logged out successfully",
         });
 });

@@ -1,6 +1,7 @@
 import express from "express";
-import { authMiddleware } from "../middleware/auth.middleware.js";
 import asyncHandler from "../utils/asyncHandler.js";
+// 🌟 CRITICAL FIX: Point to the correct folder and file path!
+import authMiddleware from "../middleware/auth.middleware.js";
 import * as job from "../controller/job.controller.js";
 import roleMiddleware from "../middleware/role.middleware.js";
 
@@ -10,12 +11,11 @@ const router = express.Router();
 router.get("/", asyncHandler(job.getJobs));
 
 // 🚀 2. RECRUITER PROTECTED PIPELINE ENDPOINT
-// CRITICAL: This must sit ABOVE /:id, otherwise Express will think the word "recruiter" is a job ID!
 router.get(
   "/recruiter/jobs", 
   authMiddleware, 
   roleMiddleware("recruiter"), 
-  asyncHandler(job.getRecruiterJobsWithApplicants)
+  asyncHandler(job.getRecruiterJobs) // 🌟 MATCHED NAME: Points cleanly to your controller function
 );
 
 // 3. MIXED ID PATHS

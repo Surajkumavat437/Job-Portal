@@ -1,178 +1,243 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom"; 
+import { useNavigate } from "react-router-dom";
 import { createJobApi } from "../../api/jobApi.js";
 import { toast } from "react-hot-toast";
-import { 
-  Briefcase, MapPin, IndianRupee, Building2, 
-  FileText, Clock, Sparkles 
+import {
+    Briefcase, MapPin, IndianRupee, Building2,
+    FileText, Clock, Sparkles
 } from "lucide-react";
 
 import FormInputField from "./components/FormInputField";
 import FormSelectField from "./components/FormSelectField";
 
+// Security: whitelist allowed job types; must match backend enum values
+const ALLOWED_JOB_TYPES = ["full-time", "part-time", "internship"];
+
+// Security: field length caps to prevent overly large payloads
+const MAX_TITLE_LENGTH = 150;
+const MAX_DESCRIPTION_LENGTH = 5000;
+const MAX_LOCATION_LENGTH = 200;
+const MAX_COMPANY_LENGTH = 200;
+const MAX_SALARY = 100_000_000; // ₹10 Crore — reasonable upper bound
+
 const PostJobForm = () => {
-  const navigate = useNavigate(); 
+    const navigate = useNavigate();
 
-  const [formData, setFormData] = useState({
-    title: "",
-    companyName: "",
-    location: "",
-    salary: "",
-    jobType: "full-time", 
-    description: ""
-  });
+    const [formData, setFormData] = useState({
+        title: "",
+        companyName: "",
+        location: "",
+        salary: "",
+        jobType: "full-time",
+        description: "",
+    });
 
-  const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(false);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-
-    const submissionPayload = {
-      ...formData,
-      salary: Number(formData.salary)
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+        setFormData((prev) => ({ ...prev, [name]: value }));
     };
 
-    try {
-      const response = await createJobApi(submissionPayload);
-      
-      if (response.success || response) {
-        toast.success("Position successfully registered! Redirecting...");
-        
-        setFormData({
-          title: "",
-          companyName: "",
-          location: "",
-          salary: "",
-          jobType: "full-time",
-          description: ""
-        });
+    const handleSubmit = async (e) => {
+        e.preventDefault();
 
-        setTimeout(() => {
-          navigate("/admin/dashboard");
-        }, 1500);
-      }
-    } catch (err) {
-      console.error("Job posting error branch caught:", err);
-      toast.error(err.response?.data?.message || "Failed to register this opportunity.");
-    } finally {
-      setLoading(false);
-    }
-  };
+        // Security: client-side validation before the network request
+        const parsedSalary = Number(formData.salary);
 
-  const jobTypeOptions = [
-    { value: "full-time", label: "💼 Full-Time Employment" },
-    { value: "part-time", label: "⏱️ Part-Time Position" },
-    { value: "internship", label: "🎓 Internship Program" }
-  ];
+        if (!formData.title.trim()) {
+            toast.error("Job title is required.");
+            return;
+        }
+        if (formData.title.trim().length > MAX_TITLE_LENGTH) {
+            toast.error(`Job title must be ${MAX_TITLE_LENGTH} characters or fewer.`);
+            return;
+        }
+        if (!formData.location.trim()) {
+            toast.error("Location is required.");
+            return;
+        }
+        if (formData.location.trim().length > MAX_LOCATION_LENGTH) {
+            toast.error(`Location must be ${MAX_LOCATION_LENGTH} characters or fewer.`);
+            return;
+        }
+        if (!Number.isFinite(parsedSalary) || parsedSalary < 0) {
+            toast.error("Please enter a valid non-negative salary.");
+            return;
+        }
+        if (parsedSalary > MAX_SALARY) {
+            toast.error("Salary value seems unrealistically high. Please check.");
+            return;
+        }
+        if (!formData.description.trim()) {
+            toast.error("Job description is required.");
+            return;
+        }
+        if (formData.description.trim().length > MAX_DESCRIPTION_LENGTH) {
+            toast.error(`Description must be ${MAX_DESCRIPTION_LENGTH} characters or fewer.`);
+            return;
+        }
+        // Security: enforce jobType against a whitelist — do not trust the select value blindly
+        if (!ALLOWED_JOB_TYPES.includes(formData.jobType)) {
+            toast.error("Invalid job type selected.");
+            return;
+        }
+        if (formData.companyName.trim().length > MAX_COMPANY_LENGTH) {
+            toast.error(`Company name must be ${MAX_COMPANY_LENGTH} characters or fewer.`);
+            return;
+        }
 
-  return (
-    <div className="p-4 md:p-8 max-w-3xl mx-auto text-foreground animate-fade-in">
-      {/* HEADER SECTION */}
-      <div className="mb-8">
-        <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary/10 border border-primary/20 text-primary text-xs font-bold uppercase tracking-widest rounded-full mb-3">
-          <Sparkles size={12} /> Live Workspace
+        setLoading(true);
+
+        const submissionPayload = {
+            title: formData.title.trim(),
+            companyName: formData.companyName.trim(),
+            location: formData.location.trim(),
+            salary: parsedSalary,
+            jobType: formData.jobType,
+            description: formData.description.trim(),
+        };
+
+        try {
+            const response = await createJobApi(submissionPayload);
+
+            if (response.success || response) {
+                toast.success("Position registered successfully! Redirecting...");
+
+                setFormData({
+                    title: "",
+                    companyName: "",
+                    location: "",
+                    salary: "",
+                    jobType: "full-time",
+                    description: "",
+                });
+
+                setTimeout(() => {
+                    navigate("/admin/dashboard");
+                }, 1500);
+            }
+        } catch (err) {
+            // Security: surface only the backend message, never raw error objects
+            toast.error(err.response?.data?.message || "Failed to register this opportunity.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const jobTypeOptions = [
+        { value: "full-time", label: "💼 Full-Time Employment" },
+        { value: "part-time", label: "⏱️ Part-Time Position" },
+        { value: "internship", label: "🎓 Internship Program" },
+    ];
+
+    return (
+        <div className="p-4 md:p-8 max-w-3xl mx-auto text-foreground animate-fade-in">
+            {/* HEADER SECTION */}
+            <div className="mb-8">
+                <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary/10 border border-primary/20 text-primary text-xs font-bold uppercase tracking-widest rounded-full mb-3">
+                    <Sparkles size={12} /> Live Workspace
+                </div>
+                <h1 className="text-3xl font-bold tracking-tight">Create a Job Opening</h1>
+                <p className="text-muted-foreground text-sm mt-1 leading-relaxed">
+                    Fill out the metadata constraints below to broadcast a new opening across your candidate platform pools.
+                </p>
+            </div>
+
+            {/* CORE ENTRY FORM CONFIG */}
+            <form onSubmit={handleSubmit} className="bg-card border border-border rounded-[2rem] p-6 md:p-8 shadow-sm space-y-6">
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <FormInputField
+                        label="Job Title"
+                        icon={Briefcase}
+                        name="title"
+                        required
+                        value={formData.title}
+                        onChange={handleChange}
+                        placeholder="e.g., Full Stack Web Engineer"
+                        maxLength={MAX_TITLE_LENGTH}
+                    />
+
+                    <FormInputField
+                        label="Company Name"
+                        icon={Building2}
+                        name="companyName"
+                        value={formData.companyName}
+                        onChange={handleChange}
+                        placeholder="e.g., Cozy Bistro Tech Labs"
+                        maxLength={MAX_COMPANY_LENGTH}
+                    />
+
+                    <FormInputField
+                        label="Geographic Location"
+                        icon={MapPin}
+                        name="location"
+                        required
+                        value={formData.location}
+                        onChange={handleChange}
+                        placeholder="e.g., Bangalore, IN (or Remote)"
+                        maxLength={MAX_LOCATION_LENGTH}
+                    />
+
+                    <FormInputField
+                        label="Yearly Salary (₹ / LPA)"
+                        icon={IndianRupee}
+                        name="salary"
+                        type="number"
+                        required
+                        min="0"
+                        max={MAX_SALARY}
+                        value={formData.salary}
+                        onChange={handleChange}
+                        placeholder="e.g., 800000"
+                    />
+                </div>
+
+                <FormSelectField
+                    label="Engagement Model"
+                    icon={Clock}
+                    name="jobType"
+                    value={formData.jobType}
+                    onChange={handleChange}
+                    options={jobTypeOptions}
+                />
+
+                {/* DESCRIPTION AREA */}
+                <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                        <FileText size={14} className="text-primary" /> Role Overview & Requirements <span className="text-destructive">*</span>
+                    </label>
+                    <textarea
+                        name="description"
+                        required
+                        rows={5}
+                        maxLength={MAX_DESCRIPTION_LENGTH}
+                        value={formData.description}
+                        onChange={handleChange}
+                        placeholder="Outline structural competencies, expectations, requirements, and tech stack proficiencies..."
+                        className="w-full p-4 bg-secondary/10 border border-border rounded-2xl text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:bg-background transition-all leading-relaxed resize-none scrollbar-thin"
+                    />
+                </div>
+
+                {/* SUBMISSION EXECUTION LAYER */}
+                <div className="pt-4 border-t border-border flex justify-end">
+                    <button
+                        type="submit"
+                        disabled={loading}
+                        className="w-full sm:w-auto px-8 py-3.5 bg-primary text-primary-foreground font-bold text-sm rounded-xl shadow-md hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+                    >
+                        {loading ? (
+                            <div className="w-5 h-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                        ) : (
+                            "Broadcast Vacancy"
+                        )}
+                    </button>
+                </div>
+
+            </form>
         </div>
-        <h1 className="text-3xl font-bold tracking-tight">Create a Job Opening</h1>
-        <p className="text-muted-foreground text-sm mt-1 leading-relaxed">
-          Fill out the metadata constraints below to broadcast a new opening across your candidate platform pools.
-        </p>
-      </div>
-
-      {/* CORE ENTRY FORM CONFIG */}
-      <form onSubmit={handleSubmit} className="bg-card border border-border rounded-[2rem] p-6 md:p-8 shadow-sm space-y-6">
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <FormInputField
-            label="Job Title"
-            icon={Briefcase}
-            name="title"
-            required
-            value={formData.title}
-            onChange={handleChange}
-            placeholder="e.g., Full Stack Web Engineer"
-          />
-
-          <FormInputField
-            label="Company Name"
-            icon={Building2}
-            name="companyName"
-            value={formData.companyName}
-            onChange={handleChange}
-            placeholder="e.g., Cozy Bistro Tech Labs"
-          />
-
-          <FormInputField
-            label="Geographic Location"
-            icon={MapPin}
-            name="location"
-            required
-            value={formData.location}
-            onChange={handleChange}
-            placeholder="e.g., Bangalore, IN (or Remote)"
-          />
-
-          <FormInputField
-            label="Yearly Salary (₹ / LPA)"
-            icon={IndianRupee}
-            name="salary"
-            type="number"
-            required
-            min="0"
-            value={formData.salary}
-            onChange={handleChange}
-            placeholder="e.g., 800000"
-          />
-        </div>
-
-        <FormSelectField
-          label="Engagement Model"
-          icon={Clock}
-          name="jobType"
-          value={formData.jobType}
-          onChange={handleChange}
-          options={jobTypeOptions}
-        />
-
-        {/* DESCRIPTION AREA */}
-        <div className="space-y-2">
-          <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-            <FileText size={14} className="text-primary" /> Role Overview & Requirements <span className="text-destructive">*</span>
-          </label>
-          <textarea
-            name="description"
-            required
-            rows={5}
-            value={formData.description}
-            onChange={handleChange}
-            placeholder="Outline structural competencies, expectations, requirements, and tech stack proficiencies..."
-            className="w-full p-4 bg-secondary/10 border border-border rounded-2xl text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:bg-background transition-all leading-relaxed resize-none scrollbar-thin"
-          />
-        </div>
-
-        {/* SUBMISSION EXECUTION LAYER */}
-        <div className="pt-4 border-t border-border flex justify-end">
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full sm:w-auto px-8 py-3.5 bg-primary text-primary-foreground font-bold text-sm rounded-xl shadow-md hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
-          >
-            {loading ? (
-              <div className="w-5 h-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-            ) : (
-              "Broadcast Vacancy"
-            )}
-          </button>
-        </div>
-
-      </form>
-    </div>
-  );
+    );
 };
 
 export default PostJobForm;

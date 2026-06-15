@@ -1,6 +1,6 @@
 import express from "express";
 import * as application from "../controller/application.controller.js";
-import { authMiddleware } from "../middleware/auth.middleware.js";
+import authMiddleware from "../middleware/auth.middleware.js";
 import roleMiddleware from "../middleware/role.middleware.js";
 import asyncHandler from "../utils/asyncHandler.js"; // 👈 Import your asyncHandler
 

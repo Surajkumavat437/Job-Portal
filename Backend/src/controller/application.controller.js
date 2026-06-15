@@ -2,134 +2,138 @@ import application from "../models/application.model.js";
 import ApiError from "../utils/apiError.js";
 import mongoose from "mongoose";
 import job from "../models/job.model.js";
-import Profile from "../models/profile.model.js"; // 🌟 Added import for Profile model
+import Profile from "../models/profile.model.js";
 
+// ─── Allowed status values (must stay in sync with application.model.js enum) ──
+const ALLOWED_STATUSES = ["applied", "reviewed", "selected", "rejected"];
+
+// ─── APPLY TO JOB ──────────────────────────────────────────────────────────────
 export const applyToJob = async (req, res) => {
-  const { id } = req.params;
+    const { id } = req.params;
 
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    throw new ApiError(400, "wrong Job ID");
-  }
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+        throw new ApiError(400, "Invalid Job ID");
+    }
 
-  const jobData = await job.findById(id);
+    const jobData = await job.findById(id);
+    if (!jobData) {
+        throw new ApiError(404, "Job not found");
+    }
 
-  if (!jobData) {
-    throw new ApiError(404, "Job details not Found");
-  }
+    const applicantId = req.user.id;
 
-  // Safe fallback to check both token assignment structures (.id or ._id)
-  const applicantId = req.user.id || req.user._id;
+    // Guard: applicant must have a completed profile before applying
+    const studentProfile = await Profile.findOne({ user: applicantId });
+    if (!studentProfile) {
+        throw new ApiError(
+            400,
+            "Please complete your professional profile (resume, skills, bio) before applying to jobs."
+        );
+    }
 
-  // 1. 🌟 Guard: Look up the student's profile before allowing them to apply
-  const studentProfile = await Profile.findOne({ user: applicantId });
+    // Guard: prevent duplicate applications (belt-and-suspenders alongside the DB unique index)
+    const alreadyApplied = await application.findOne({ job: id, applicant: applicantId });
+    if (alreadyApplied) {
+        throw new ApiError(409, "You have already submitted an application for this position.");
+    }
 
-  if (!studentProfile) {
-    throw new ApiError(
-      400,
-      "Please complete your professional profile (resume, skills, bio) before applying to jobs."
-    );
-  }
+    const data = await application.create({
+        job: id,
+        applicant: applicantId,
+        profile: studentProfile._id,
+    });
 
-  // 2. Guard: Programmatically catch double application submissions
-  const alreadyApplied = await application.findOne({ job: id, applicant: applicantId });
-  if (alreadyApplied) {
-    throw new ApiError(400, "You have already submitted an application for this position.");
-  }
-
-  // 3. 🚀 Create the application with the explicit profile ID saved directly!
-  const data = await application.create({
-    job: id,
-    applicant: applicantId,
-    profile: studentProfile._id, // 🌟 Saved straight to the database layout
-  });
-
-  return res.status(201).json({
-    success: true,
-    message: "Application created successfully",
-    data,
-  });
+    return res.status(201).json({
+        success: true,
+        message: "Application submitted successfully",
+        data,
+    });
 };
 
+// ─── MY APPLICATIONS ───────────────────────────────────────────────────────────
 export const myApplications = async (req, res) => {
-  const allApplication = await application
-    .find({ applicant: req.user.id })
-    .populate("job");
-    
-  res.status(200).json({
-    success: true,
-    message: "All the Applied Jobs list",
-    data: allApplication,
-  });
+    const applicantId = req.user.id;
+
+    const allApplication = await application
+        .find({ applicant: applicantId })
+        .populate("job");
+
+    res.status(200).json({
+        success: true,
+        message: "Applications fetched successfully",
+        data: allApplication,
+    });
 };
 
+// ─── GET APPLICATIONS FOR JOB ──────────────────────────────────────────────────
 export const getApplicationsForJob = async (req, res) => {
-  const { jobId } = req.params;
+    const { jobId } = req.params;
 
-  if (!mongoose.Types.ObjectId.isValid(jobId)) {
-    throw new ApiError(400, "Invalid Job ID");
-  }
+    if (!mongoose.Types.ObjectId.isValid(jobId)) {
+        throw new ApiError(400, "Invalid Job ID");
+    }
 
-  const jobData = await job.findById(jobId);
+    const jobData = await job.findById(jobId);
+    if (!jobData) {
+        throw new ApiError(404, "Job not found");
+    }
 
-  if (!jobData) {
-    throw new ApiError(404, "Job not Found");
-  }
+    // Security: IDOR prevention — verify the recruiter owns this job before exposing applicants
+    if (jobData.createdBy.toString() !== req.user.id) {
+        throw new ApiError(403, "Not authorised to view applicants for this job");
+    }
 
-  if (jobData.createdBy.toString() !== req.user.id) {
-    throw new ApiError(403, "Not authorized to view applicants");
-  }
+    // Security: only select fields needed by the frontend — do not expose password or role
+    const applications = await application
+        .find({ job: jobId })
+        .populate("applicant", "name email")
+        .populate("profile", "bio skills experience education resume");
 
-  const applications = await application
-    .find({ job: jobId })
-    .populate("applicant", "name email")
-    .populate("profile", "bio skills experience education resume"); 
-
-  return res.status(200).json({
-    success: true,
-    message: "Applicants fetched successfully",
-    data: applications,
-  });
+    return res.status(200).json({
+        success: true,
+        message: "Applicants fetched successfully",
+        data: applications,
+    });
 };
 
+// ─── UPDATE APPLICATION STATUS ─────────────────────────────────────────────────
 export const updateApplicationStatus = async (req, res) => {
-  const { id } = req.params;
-  const { status } = req.body;
+    const { id } = req.params;
+    const { status } = req.body;
 
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    throw new ApiError(400, "Invalid Application ID");
-  }
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+        throw new ApiError(400, "Invalid Application ID");
+    }
 
-  // 🌟 Updated validation array to use clean, streamlined hiring stages:
-  const allowedStatus = ["applied", "reviewed", "selected", "rejected"];
+    // Security: whitelist-validate status to prevent arbitrary values being written to DB
+    if (!status || !ALLOWED_STATUSES.includes(status)) {
+        throw new ApiError(
+            400,
+            `Invalid status. Allowed values are: ${ALLOWED_STATUSES.join(", ")}`
+        );
+    }
 
-  if (!allowedStatus.includes(status)) {
-    throw new ApiError(400, `Invalid status option. Allowed choices are: ${allowedStatus.join(", ")}`);
-  }
+    const applicationData = await application.findById(id);
+    if (!applicationData) {
+        throw new ApiError(404, "Application not found");
+    }
 
-  const applicationData = await application.findById(id);
+    const jobData = await job.findById(applicationData.job);
+    if (!jobData) {
+        throw new ApiError(404, "Associated job not found");
+    }
 
-  if (!applicationData) {
-    throw new ApiError(404, "Application not found");
-  }
+    // Security: IDOR prevention — verify the recruiter owns the job before mutating the application
+    if (jobData.createdBy.toString() !== req.user.id) {
+        throw new ApiError(403, "Not authorised to update status for this application");
+    }
 
-  const jobData = await job.findById(applicationData.job);
+    applicationData.status = status;
+    await applicationData.save();
 
-  if (!jobData) {
-    throw new ApiError(404, "Job not found");
-  }
-
-  // Verify that the logged-in user is actually the recruiter who created this job posting
-  if (jobData.createdBy.toString() !== req.user.id) {
-    throw new ApiError(403, "Not authorized to update status for this pipeline");
-  }
-
-  // Apply update and write cleanly to MongoDB collection
-  applicationData.status = status;
-  await applicationData.save();
-
-  return res.status(200).json({
-    success: true,
-    message: `Application stage updated successfully to ${status}`,
-    data: applicationData,
-  });
+    return res.status(200).json({
+        success: true,
+        message: `Application status updated to ${status}`,
+        data: applicationData,
+    });
 };

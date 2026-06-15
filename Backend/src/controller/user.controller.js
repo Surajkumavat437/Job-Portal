@@ -2,18 +2,19 @@ import User from "../models/user.model.js";
 import Profile from "../models/profile.model.js";
 import ApiError from "../utils/apiError.js";
 import asyncHandler from "../utils/asyncHandler.js";
+import mongoose from "mongoose";
 
-// 1. GET CURRENT USER (UPDATED WITH POPULATE)
+// ─── GET CURRENT USER ──────────────────────────────────────────────────────────
 export const getCurrentUser = asyncHandler(async (req, res) => {
     const userId = req.user.id;
 
-    // 🌟 FIXED HERE: Added .populate("savedJobs") so the frontend knows what is bookmarked on login
+    // Security: exclude password field from the response
     const user = await User.findById(userId)
         .select("-password")
         .populate("savedJobs");
 
     if (!user) {
-        throw new ApiError(404, "User Not Found");
+        throw new ApiError(404, "User not found");
     }
 
     res.status(200).json({
@@ -23,14 +24,14 @@ export const getCurrentUser = asyncHandler(async (req, res) => {
     });
 });
 
-// 2. GET USER PROFILE
+// ─── GET USER PROFILE ──────────────────────────────────────────────────────────
 export const getProfile = asyncHandler(async (req, res) => {
     const userId = req.user.id;
 
     const profile = await Profile.findOne({ user: userId });
 
     if (!profile) {
-        throw new ApiError(404, "Profile Not Found");
+        throw new ApiError(404, "Profile not found");
     }
 
     res.status(200).json({
@@ -40,29 +41,53 @@ export const getProfile = asyncHandler(async (req, res) => {
     });
 });
 
-// 3. UPDATE USER PROFILE
+// ─── UPDATE USER PROFILE ────────────────────────────────────────────────────────
 export const updateProfile = asyncHandler(async (req, res) => {
     const userId = req.user.id;
-    const { bio, skills, experience, education, resume} = req.body;
+
+    // Security: explicitly whitelist only the fields that are allowed to be updated.
+    // Using spread on req.body without a whitelist would allow a malicious client to
+    // inject arbitrary fields (e.g., "user" to change profile ownership).
+    const { bio, skills, experience, education, resume } = req.body;
+
+    // Security: validate resume URL format when provided — must be a cloudinary https URL
+    if (resume !== undefined && resume !== "") {
+        const isValidUrl =
+            typeof resume === "string" &&
+            resume.startsWith("https://") &&
+            resume.length <= 2000;
+        if (!isValidUrl) {
+            throw new ApiError(400, "Resume must be a valid HTTPS URL");
+        }
+    }
+
+    // Security: validate skills is an array of non-empty strings when provided
+    if (skills !== undefined) {
+        if (!Array.isArray(skills)) {
+            throw new ApiError(400, "Skills must be an array of strings");
+        }
+        if (skills.some((s) => typeof s !== "string" || s.trim().length === 0)) {
+            throw new ApiError(400, "Each skill must be a non-empty string");
+        }
+    }
 
     let profile = await Profile.findOne({ user: userId });
 
     if (!profile) {
         profile = await Profile.create({
             user: userId,
-            bio,
-            skills,
-            experience,
-            education,
-            resume,
+            bio: bio ? String(bio).trim() : undefined,
+            skills: skills || [],
+            experience: experience ? String(experience).trim() : undefined,
+            education: education ? String(education).trim() : undefined,
+            resume: resume || undefined,
         });
-    } 
-    else {
-        if (bio) profile.bio = bio;
-        if (skills) profile.skills = skills;
-        if (experience) profile.experience = experience;
-        if (education) profile.education = education;
-        if (resume) profile.resume = resume;
+    } else {
+        if (bio !== undefined) profile.bio = String(bio).trim();
+        if (skills !== undefined) profile.skills = skills;
+        if (experience !== undefined) profile.experience = String(experience).trim();
+        if (education !== undefined) profile.education = String(education).trim();
+        if (resume !== undefined) profile.resume = resume;
 
         await profile.save();
     }
@@ -74,14 +99,19 @@ export const updateProfile = asyncHandler(async (req, res) => {
     });
 });
 
-// 4. TOGGLE SAVE / UNSAVE A JOB LISTING
+// ─── TOGGLE SAVE / UNSAVE A JOB ───────────────────────────────────────────────
 export const toggleSaveJob = asyncHandler(async (req, res) => {
-    const { id: jobId } = req.params; 
-    const userId = req.user.id;      
+    const { id: jobId } = req.params;
+    const userId = req.user.id;
+
+    // Security: validate that jobId is a valid ObjectId to prevent injection
+    if (!mongoose.Types.ObjectId.isValid(jobId)) {
+        throw new ApiError(400, "Invalid Job ID");
+    }
 
     const user = await User.findById(userId);
     if (!user) {
-        throw new ApiError(404, "User profile identity context not found.");
+        throw new ApiError(404, "User not found");
     }
 
     const isAlreadySaved = user.savedJobs.includes(jobId);
@@ -92,7 +122,7 @@ export const toggleSaveJob = asyncHandler(async (req, res) => {
 
         res.status(200).json({
             success: true,
-            message: "Job position successfully removed from bookmarks.",
+            message: "Job removed from bookmarks.",
             isSaved: false,
         });
     } else {
@@ -101,28 +131,28 @@ export const toggleSaveJob = asyncHandler(async (req, res) => {
 
         res.status(200).json({
             success: true,
-            message: "Job position pinned to your saved bookmarks successfully!",
+            message: "Job saved to bookmarks.",
             isSaved: true,
         });
     }
 });
 
-// 5. GET ALL BOOKMARKED JOBS
+// ─── GET ALL SAVED JOBS ────────────────────────────────────────────────────────
 export const getSavedJobs = asyncHandler(async (req, res) => {
     const userId = req.user.id;
 
     const userWithBookmarks = await User.findById(userId).populate({
         path: "savedJobs",
-        options: { sort: { createdAt: -1 } } 
+        options: { sort: { createdAt: -1 } },
     });
 
     if (!userWithBookmarks) {
-        throw new ApiError(404, "User session state not found.");
+        throw new ApiError(404, "User not found");
     }
 
     res.status(200).json({
         success: true,
-        message: "Saved job pipeline collections parsed successfully.",
+        message: "Saved jobs fetched successfully",
         data: userWithBookmarks.savedJobs || [],
     });
 });
