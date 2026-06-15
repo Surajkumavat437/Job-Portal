@@ -11,7 +11,7 @@ import PostJobForm from "../pages/recruiter/PostJobForm.jsx";
 import JobDetails from "../pages/jobseeker/JobDetails.jsx"; 
 
 import Login from "../pages/auth/Login";
-import PageError from "../pages/pageError.jsx";
+import PageError from "../pages/PageError.jsx";
 
 const AppRoutes = () => {
   return (
