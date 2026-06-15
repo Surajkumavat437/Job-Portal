@@ -7,9 +7,9 @@ import asyncHandler from "../utils/asyncHandler.js";
 // ─── Shared secure cookie options ──────────────────────────────────────────────
 const COOKIE_OPTIONS = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: true,
     // 🌟 FIX: Shifted from 'strict' to 'lax' so local cross-port architectures (5173 -> 3000) pass cookies cleanly
-    sameSite: "lax", 
+    sameSite: "none", 
     maxAge: 60 * 60 * 1000, // 1 hour
 };
 
@@ -121,8 +121,8 @@ export const logout = asyncHandler(async (req, res) => {
         .status(200)
         .cookie("accessToken", "", {
             httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
+            secure: true,
+            sameSite: "none",
             expires: new Date(0),
         })
         .json({
